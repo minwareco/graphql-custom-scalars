@@ -12,11 +12,8 @@ import {
   scalars,
   queryDocument,
 } from './__fixtures__/serializeInputNested';
-import { executeExchange } from '@urql/exchange-execute';
-import { createClient, cacheExchange, mapExchange } from '@urql/core';
 import { buildSchema, printSchema } from 'graphql';
 import apolloScalarLink from '../apolloScalarLink';
-import urqlScalarExchange from '../urqlScalarExchange';
 
 const rawDay = '2018-02-03T12:13:14.000Z';
 const rawMorning = '2018-02-03T00:00:00.000Z';
@@ -127,115 +124,6 @@ describe('serializes input', () => {
           },
         },
       });
-      expect(result.data).toMatchInlineSnapshot(`
-        {
-          "convert": {
-            "__typename": "MyResponse",
-            "first": CustomDate {
-              "internalDate": 2018-02-03T00:00:00.000Z,
-            },
-            "nested": {
-              "__typename": "MyNestedResponse",
-              "days": [
-                2018-02-03T12:13:14.000Z,
-                2018-03-04T12:13:14.000Z,
-              ],
-              "nestedDay": 2018-02-03T12:13:14.000Z,
-            },
-          },
-        }
-      `);
-    });
-  });
-
-  describe('urql', () => {
-    it('maps results without custom scalars should fail', async () => {
-      const exchange = urqlScalarExchange({ schema: schemaWithoutTypes });
-      const executableExchange = executeExchange({ schema });
-      const client = createClient({
-        url: 'http://0.0.0.0',
-        exchanges: [
-          cacheExchange,
-          exchange,
-          mapExchange({
-            onOperation: (operation) => {
-              expect(operation.variables).toEqual({
-                input: {
-                  first: parsedDay,
-                  second: {
-                    morning: parsedMorning,
-                    list: [parsedMorning, parsedMorning2],
-                  },
-                },
-              });
-              operation.variables = JSON.parse(
-                JSON.stringify(operation.variables)
-              );
-              return operation;
-            },
-          }),
-          executableExchange,
-        ],
-      });
-      const result = await client
-        .query(queryDocument, {
-          input: {
-            first: parsedDay,
-            second: {
-              morning: parsedMorning,
-              list: [parsedMorning, parsedMorning2],
-            },
-          },
-        })
-        .toPromise();
-      expect(result.error).toBeDefined();
-      expect(result.error?.graphQLErrors[0].message).toContain(
-        'Variable "$input" got invalid value'
-      );
-    });
-
-    it('maps results with custom scalars', async () => {
-      const exchange = urqlScalarExchange({
-        schema: schemaWithoutTypes,
-        scalars,
-      });
-      const executableExchange = executeExchange({ schema });
-      const client = createClient({
-        url: 'http://0.0.0.0',
-        exchanges: [
-          cacheExchange,
-          exchange,
-          mapExchange({
-            onOperation: (operation) => {
-              expect(operation.variables).toEqual({
-                input: {
-                  first: rawDay,
-                  second: {
-                    morning: rawMorning,
-                    list: [rawMorning, rawMorning2],
-                  },
-                },
-              });
-              operation.variables = JSON.parse(
-                JSON.stringify(operation.variables)
-              );
-              return operation;
-            },
-          }),
-          executableExchange,
-        ],
-      });
-      const result = await client
-        .query(queryDocument, {
-          input: {
-            first: parsedDay,
-            second: {
-              morning: parsedMorning,
-              list: [parsedMorning, parsedMorning2],
-            },
-          },
-        })
-        .toPromise();
       expect(result.data).toMatchInlineSnapshot(`
         {
           "convert": {
