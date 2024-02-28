@@ -8,7 +8,7 @@ import { IntrospectionQuery } from 'graphql';
 import gql from 'graphql-tag';
 import { pipe, map, makeSubject, publish, tap } from 'wonka';
 
-import scalarExchange from '../';
+import { urqlScalarExchange } from '../';
 import schema from './__fixtures__/schema.json';
 
 const dispatchDebug = jest.fn();
@@ -161,27 +161,27 @@ test.each([
     variables: {},
   });
 
-  const response = jest.fn(
-    (forwardOp: Operation): OperationResult => {
-      expect(forwardOp.key === op.key).toBeTruthy();
-      return {
-        operation: forwardOp,
-        data: { __typename: 'Query', ...data },
-      };
-    }
-  );
+  const response = jest.fn((forwardOp: Operation): OperationResult => {
+    expect(forwardOp.key === op.key).toBeTruthy();
+    return {
+      operation: forwardOp,
+      data: { __typename: 'Query', ...data },
+    };
+  });
   const result = jest.fn();
-  const forward: ExchangeIO = ops$ => pipe(ops$, map(response));
+  const forward: ExchangeIO = (ops$) => pipe(ops$, map(response));
 
   const scalars = {
-    String: jest.fn((text: string) => {
-      return text;
-    }),
+    String: {
+      parseValue: jest.fn((text: any) => {
+        return text;
+      }),
+    },
   };
 
   pipe(
-    scalarExchange({
-      schema: (schema as unknown) as IntrospectionQuery,
+    urqlScalarExchange({
+      schema: schema as unknown as IntrospectionQuery,
       scalars,
     })({
       forward,

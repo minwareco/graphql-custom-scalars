@@ -11,20 +11,21 @@
     "node": ">=16.0.0"
   },
   "scripts": {
-    "start": "tsdx watch",
-    "build": "tsdx build",
-    "test": "tsdx test",
-    "lint": "tsdx lint",
-    "prepare": "tsdx build"
+    "start": "dts watch",
+    "build": "dts build",
+    "test": "dts test",
+    "lint": "dts lint",
+    "prepare": "dts build"
   },
   "peerDependencies": {
+    "@apollo/client": "^3.9.5",
     "@urql/core": "^1.12.3 || ^2.0.0 || ^3.0.0",
     "graphql": "^15.3.0 || ^16.0.0",
     "wonka": "^4.0.14 || ^6.0.0"
   },
   "husky": {
     "hooks": {
-      "pre-commit": "tsdx lint"
+      "pre-commit": "dts lint"
     }
   },
   "prettier": {
@@ -33,17 +34,18 @@
     "singleQuote": true,
     "trailingComma": "es5"
   },
-  "name": "urql-custom-scalars-exchange",
-  "author": "Christian Lentfort",
-  "module": "dist/urql-custom-scalars-exchange.esm.js",
+  "name": "graphql-custom-scalars",
+  "author": "minware",
+  "module": "dist/graphql-custom-scalars.esm.js",
   "devDependencies": {
+    "@types/lodash": "^4.14.202",
     "@urql/core": "^3.0.0",
+    "dts-cli": "^2.0.4",
     "graphql": "^16.0.0",
     "graphql-tag": "^2.12.6",
     "husky": "^4.2.5",
-    "tsdx": "^0.14.1",
     "tslib": "^2.4.0",
-    "typescript": "^4.7.4",
+    "typescript": "^4.9.5",
     "wonka": "^6.0.0"
   },
   "resolutions": {
@@ -51,5 +53,7 @@
     "**/@typescript-eslint/eslint-plugin": "^5.16.0",
     "**/@typescript-eslint/parser": "^5.16.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "lodash": "^4.17.21"
+  }
 }
