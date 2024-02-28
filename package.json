@@ -18,10 +18,7 @@
     "prepare": "dts build"
   },
   "peerDependencies": {
-    "@apollo/client": "^3.9.5",
-    "@urql/core": "^1.12.3 || ^2.0.0 || ^3.0.0",
-    "graphql": "^15.3.0 || ^16.0.0",
-    "wonka": "^4.0.14 || ^6.0.0"
+    "graphql": "^15.3.0 || ^16.0.0"
   },
   "husky": {
     "hooks": {
@@ -37,19 +34,27 @@
   "name": "@minware/graphql-custom-scalars",
   "author": "minware",
   "module": "dist/graphql-custom-scalars.esm.js",
+  "optionalDependencies": {
+    "@urql/core": "^4.0.0",
+    "@apollo/client": "^3.9.5"
+  },
   "devDependencies": {
+    "@apollo/client": "^3.9.5",
+    "@graphql-tools/schema": "^10.0.3",
     "@types/lodash": "^4.14.202",
-    "@urql/core": "^3.0.0",
+    "@urql/core": "^4.0.0",
+    "@urql/exchange-execute": "^2.2.2",
     "dts-cli": "^2.0.4",
     "graphql": "^16.0.0",
     "graphql-tag": "^2.12.6",
     "husky": "^4.2.5",
+    "react": "^17.0.2",
     "tslib": "^2.4.0",
     "typescript": "^4.9.5",
     "wonka": "^6.0.0"
   },
   "resolutions": {
-    "**/typescript": "^4.7.4",
+    "**/typescript": "^4.9.5",
     "**/@typescript-eslint/eslint-plugin": "^5.16.0",
     "**/@typescript-eslint/parser": "^5.16.0"
   },

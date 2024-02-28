@@ -2,6 +2,7 @@ import {
   ASTNode,
   ExecutionResult,
   FieldNode,
+  OperationDefinitionNode,
   GraphQLOutputType,
   GraphQLScalarType,
   GraphQLSchema,
@@ -12,10 +13,20 @@ import {
   TypeInfo,
   visit,
   visitWithTypeInfo,
+  isInputType,
+  GraphQLEnumType,
+  GraphQLInputObjectType,
+  GraphQLInputType,
+  getNullableType,
+  isEnumType,
 } from 'graphql';
 import {
   DocumentNode,
   FragmentDefinitionNode,
+  ListTypeNode,
+  NamedTypeNode,
+  NonNullTypeNode,
+  TypeNode,
   isNode,
 } from 'graphql/language/ast';
 import { memoize } from 'lodash';
@@ -58,6 +69,13 @@ const isFieldNode = makeIsAstNodeOfKind<FieldNode>(Kind.FIELD);
 const isFragmentDefinition = makeIsAstNodeOfKind<FragmentDefinitionNode>(
   Kind.FRAGMENT_DEFINITION
 );
+const isOperationDefinitionNode = makeIsAstNodeOfKind<OperationDefinitionNode>(
+  Kind.OPERATION_DEFINITION
+);
+const isNonNullTypeNode = makeIsAstNodeOfKind<NonNullTypeNode>(
+  Kind.NON_NULL_TYPE
+);
+const isListTypeNode = makeIsAstNodeOfKind<ListTypeNode>(Kind.LIST_TYPE);
 
 function mapScalar(
   data: any,
@@ -103,11 +121,7 @@ function mapScalar(
 
 export interface Operation {
   query: DocumentNode;
-}
-
-interface ScalarLinkOptions {
-  scalars: Record<string, Pick<GraphQLScalarType<any, any>, 'parseValue'>>;
-  schema: GraphQLSchema;
+  variables: Record<string, any> | undefined | void;
 }
 
 function unpackTypeInner(type: GraphQLOutputType): GraphQLOutputType | void {
@@ -124,20 +138,89 @@ function unpackType(type: GraphQLOutputType): GraphQLScalarType | void {
   return unpackTypeInner(type) as GraphQLScalarType | void;
 }
 
-export function customScalarResolver({ schema, scalars }: ScalarLinkOptions) {
-  const typeInfoInstance = new TypeInfo(schema);
+export class Serializer {
+  constructor(
+    readonly schema: GraphQLSchema,
+    readonly scalars: Record<string, GraphQLScalarType<any, any>>
+  ) {}
+
+  public serialize(value: any, type: GraphQLInputType): any {
+    if (isNonNullType(type)) {
+      return this.serializeInternal(value, getNullableType(type));
+    } else {
+      return this.serializeNullable(value, getNullableType(type));
+    }
+  }
+
+  protected serializeNullable(value: any, type: GraphQLInputType): any {
+    return this.serializeInternal(value, type);
+  }
+
+  protected serializeInternal(value: any, type: GraphQLInputType): any {
+    if (value === null || value === undefined) {
+      return value;
+    }
+
+    if (isScalarType(type) || isEnumType(type)) {
+      return this.serializeLeaf(value, type);
+    }
+
+    if (isListType(type)) {
+      return mapIfArray(value, (v) => this.serialize(v, type.ofType));
+    }
+
+    return this.serializeInputObject(value, type);
+  }
+
+  protected serializeLeaf(
+    value: any,
+    type: GraphQLScalarType | GraphQLEnumType
+  ): any {
+    const fns = this.scalars[type.name] || type;
+    return fns.serialize(value);
+  }
+
+  protected serializeInputObject(
+    givenValue: any,
+    type: GraphQLInputObjectType
+  ): any {
+    let value = givenValue;
+    const ret: any = {};
+    const fields = type.getFields();
+    for (const [key, val] of Object.entries(value)) {
+      const f = fields[key];
+      ret[key] = f ? this.serialize(val, f.type) : val;
+    }
+    return ret;
+  }
+}
+
+export class CustomScalarResolver {
+  private schema: GraphQLSchema;
+  private scalars: Record<string, GraphQLScalarType<any, any>>;
+  private typeInfoInstance: TypeInfo;
+  private serializer: Serializer;
+  constructor(
+    schema: GraphQLSchema,
+    scalars: Record<string, GraphQLScalarType<any, any>> = {}
+  ) {
+    this.schema = schema;
+    this.scalars = scalars;
+    this.typeInfoInstance = new TypeInfo(this.schema);
+    this.serializer = new Serializer(this.schema, this.scalars);
+  }
 
   /**
    * Return a graphql AST visitor that will find the nodes that are scalars or fragments.
    * nodesOfInterest will contain partial path arrays for each node that we can use to
    * reconstruct the full path to a scalar
    */
-  const makeVisitor = (
+  private makeVisitor(
     nodesOfInterest: Array<ScalarInQuery | FragmentSpreadInQuery>
-  ) =>
-    visitWithTypeInfo(typeInfoInstance, {
-      Field(_node, _key, _parent, astPath, anchestorAstNodes) {
-        const fieldType = typeInfoInstance.getType();
+  ) {
+    return visitWithTypeInfo(this.typeInfoInstance, {
+      Field: (_node, _key, _parent, astPath, anchestorAstNodes) => {
+        const fieldType = this.typeInfoInstance.getType();
         if (fieldType == null) {
           return;
         }
@@ -149,7 +232,7 @@ export function customScalarResolver({ schema, scalars }: ScalarLinkOptions) {
 
         const { name } = scalarType;
 
-        if (!(name in scalars)) {
+        if (!(name in this.scalars)) {
           return;
         }
 
@@ -180,7 +263,7 @@ export function customScalarResolver({ schema, scalars }: ScalarLinkOptions) {
           path,
         });
       },
-      FragmentSpread(node, _key, _parent, astPath, anchestorAstNodes) {
+      FragmentSpread: (node, _key, _parent, astPath, anchestorAstNodes) => {
         let currentAstNode: ASTNode | ReadonlyArray<ASTNode> =
           anchestorAstNodes[0];
 
@@ -209,15 +292,16 @@ export function customScalarResolver({ schema, scalars }: ScalarLinkOptions) {
         });
       },
     });
+  }
 
-  const visitOperation = memoize((operation: Operation) => {
+  private visitOperation = memoize((operation: Operation) => {
     const nodesOfInterest: Array<FragmentSpreadInQuery | ScalarInQuery> = [];
-    visit(operation.query, makeVisitor(nodesOfInterest));
+    visit(operation.query, this.makeVisitor(nodesOfInterest));
     return nodesOfInterest;
   });
 
-  const getPathsToScalars = memoize((operation: Operation) => {
-    const nodesOfInterest = visitOperation(operation);
+  private getPathsToScalars = memoize((operation: Operation) => {
+    const nodesOfInterest = this.visitOperation(operation);
     const spreadFragmentsInQuery: Record<string, FragmentSpreadInQuery[]> = {};
     const scalarsInQuery: ScalarInQuery[] = [];
 
@@ -264,22 +348,22 @@ export function customScalarResolver({ schema, scalars }: ScalarLinkOptions) {
           generatePaths(fragment, [path])
         );
         return paths.map(
-          (completePath) => [completePath, scalars[name]] as const
+          (completePath) => [completePath, this.scalars[name]] as const
         );
       }
-      return [[path, scalars[name]] as const];
+      return [[path, this.scalars[name]] as const];
     });
   });
 
-  return function mapResults<
-    Op extends Operation,
-    Results extends ExecutionResult
-  >(operation: Op, data: Results) {
+  public mapResults<Op extends Operation, Results extends ExecutionResult>(
+    operation: Op,
+    data: Results
+  ) {
     if (!data.data) {
       return data;
     }
 
-    const pathToScalars = getPathsToScalars(operation);
+    const pathToScalars = this.getPathsToScalars(operation);
 
     if (pathToScalars.length === 0) {
       return data;
@@ -290,5 +374,50 @@ export function customScalarResolver({ schema, scalars }: ScalarLinkOptions) {
     }
 
     return data;
-  };
+  }
+
+  private serializeVariable(value: any, typeNode: TypeNode): any {
+    if (isNonNullTypeNode(typeNode)) {
+      return this.serializeVariable(value, typeNode.type);
+    }
+
+    if (isListTypeNode(typeNode)) {
+      return mapIfArray(value, (v) => this.serializeVariable(v, typeNode.type));
+    }
+
+    return this.serializeNamed(value, typeNode);
+  }
+
+  private serializeNamed(value: any, typeNode: NamedTypeNode): any {
+    const typeName = typeNode.name.value;
+    const schemaType = this.schema.getType(typeName);
+
+    return schemaType && isInputType(schemaType)
+      ? this.serializer.serialize(value, schemaType)
+      : value;
+  }
+
+  public mapVariables<Op extends Operation>(operation: Op) {
+    const operationNode = operation.query.definitions.find(
+      isOperationDefinitionNode
+    );
+    const variableDefs = operationNode?.variableDefinitions ?? [];
+    if (operation.variables !== undefined) {
+      variableDefs.forEach((def) => {
+        const key = def.variable.name.value;
+        operation.variables![key] = this.serializeVariable(
+          operation.variables![key],
+          def.type
+        );
+      });
+    }
+    return operation;
+  }
+}
+
+function mapIfArray<TOther, TItem, TResponse>(
+  a: TOther | TItem[],
+  fn: (x: TItem) => TResponse
+): TOther | TResponse[] {
+  return Array.isArray(a) ? a.map(fn) : a;
 }
