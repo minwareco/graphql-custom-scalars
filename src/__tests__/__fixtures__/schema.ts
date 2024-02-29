@@ -21,7 +21,7 @@ const schema = buildSchema(/* GraphQL */ `
 export default graphql({
   schema,
   source: getIntrospectionQuery({ descriptions: false }),
-}).then(({ data }) => (data as unknown) as IntrospectionQuery);
+}).then(({ data }) => data as unknown as IntrospectionQuery);
 
 // const root = {
 //   simple: () => 'a',
