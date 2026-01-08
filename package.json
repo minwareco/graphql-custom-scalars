@@ -18,7 +18,7 @@
     "prepare": "dts build"
   },
   "peerDependencies": {
-    "@apollo/client": "^3.5.9",
+    "@apollo/client": "^3.12.5",
     "graphql": "^15.3.0 || ^16.0.0"
   },
   "husky": {
