@@ -1,6 +1,5 @@
 import {
   ASTNode,
-  ExecutionResult,
   FieldNode,
   OperationDefinitionNode,
   GraphQLOutputType,
