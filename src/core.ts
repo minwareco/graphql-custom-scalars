@@ -1,6 +1,5 @@
 import {
   ASTNode,
-  ExecutionResult,
   FieldNode,
   OperationDefinitionNode,
   GraphQLOutputType,
@@ -14,6 +13,7 @@ import {
   visit,
   visitWithTypeInfo,
   isInputType,
+  FormattedExecutionResult,
 } from 'graphql';
 import {
   DocumentNode,
@@ -295,10 +295,10 @@ export class CustomScalarResolver {
     });
   });
 
-  public mapResults<Op extends Operation, Results extends ExecutionResult>(
-    operation: Op,
-    data: Results
-  ) {
+  public mapResults<
+    Op extends Operation,
+    Results extends FormattedExecutionResult
+  >(operation: Op, data: Results) {
     if (!data.data) {
       return data;
     }
